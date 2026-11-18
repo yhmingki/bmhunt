@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f8fc">
+<title>Cari Perkataan · 马来文找生字</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --ink:#20243a; --muted:#73798d; --purple:#5969dc; --green:#159b68;
+    --pink:#f06d89; --line:#dfe2eb; --paper:#fff; --bg:#f5f6fb;
+  }
+  body {
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:Arial,"Noto Sans SC",system-ui,sans-serif;
+  }
+  button { font:inherit; }
+  .app { max-width:1500px; margin:auto; padding:18px; }
+  header {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:12px; margin-bottom:14px;
+  }
+  h1 { margin:0; font-size:clamp(20px,3vw,28px); }
+  .subtitle { color:var(--muted); font-size:13px; margin-top:4px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn {
+    border:0; border-radius:11px; padding:10px 14px;
+    cursor:pointer; font-weight:800;
+  }
+  .btn-primary { background:var(--purple); color:white; }
+  .btn-light { background:white; color:var(--ink); border:1px solid var(--line); }
+  .btn-mic { background:#f06d89; color:#fff; }
+  .btn-mic.listening { animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow:0 0 0 7px #f06d8933; } }
+
+  .game {
+    display:grid;
+    grid-template-columns:minmax(180px,1fr) minmax(380px,1.55fr) minmax(180px,1fr);
+    gap:14px; align-items:center;
+  }
+  .panel {
+    background:var(--paper); border:1px solid var(--line); border-radius:17px;
+    box-shadow:0 8px 26px #30385d0d; overflow:hidden;
+  }
+  .player-head {
+    padding:13px 14px; display:flex; justify-content:space-between;
+    align-items:center; gap:8px; border-bottom:1px solid var(--line);
+    font-weight:900;
+  }
+  .player-name { display:flex; align-items:center; gap:8px; }
+  .badge {
+    width:27px; height:27px; display:grid; place-items:center;
+    color:white; border-radius:9px; background:var(--purple);
+  }
+  .p2 .badge { background:var(--pink); }
+  .score { color:var(--muted); font-size:12px; white-space:nowrap; }
+  .card-grid {
+    display:grid; grid-template-columns:repeat(5,1fr);
+    aspect-ratio:5 / 7; padding:10px; gap:0;
+  }
+  .square {
+    background:white; border:1px solid #333; min-width:0; min-height:0;
+    position:relative; cursor:pointer;
+  }
+  .square + .square { margin-left:-1px; }
+  .square.crossed::before, .square.crossed::after {
+    content:""; position:absolute; height:3px; width:130%;
+    left:-15%; top:50%; background:var(--pink); border-radius:4px;
+  }
+  .square.crossed::before { transform:rotate(45deg); }
+  .square.crossed::after { transform:rotate(-45deg); }
+  .square:disabled { cursor:default; }
+
+  .word-panel { min-height:500px; position:relative; }
+  .word-head {
+    padding:12px 15px; display:flex; justify-content:space-between;
+    align-items:center; border-bottom:1px solid var(--line);
+  }
+  .word-head strong { font-size:14px; }
+  .word-count { font-size:12px; color:var(--muted); }
+  .word-field {
+    position:relative; min-height:455px; padding:14px;
+    overflow:hidden; background:#fff;
+  }
+  .word {
+    position:absolute; border:0; background:transparent; color:#111;
+    cursor:pointer; padding:4px 6px; border-radius:7px;
+    white-space:nowrap; line-height:1.1; transform-origin:center;
+    transition:background .15s, color .15s, opacity .15s;
+  }
+  .word:hover { background:#f1f2ff; }
+  .word.found {
+    color:#29352f; pointer-events:none;
+  }
+  .word.found::after {
+    content:""; position:absolute; left:-3%; top:52%; width:106%; height:4px;
+    border-radius:5px; background:#20ae75; transform:rotate(-12deg);
+    animation:slash .3s ease-out;
+  }
+  .word.wrong { background:#ffe5e8; animation:shake .25s; }
+  @keyframes slash { from { transform:scaleX(0) rotate(-12deg); } to { transform:scaleX(1) rotate(-12deg); } }
+  @keyframes shake { 25% { transform:translateX(-3px); } 75% { transform:translateX(3px); } }
+  .teacher {
+    margin-top:14px; padding:15px; display:grid; gap:10px;
+  }
+  .teacher-title { font-weight:900; }
+  .clue {
+    font-size:clamp(22px,4vw,34px); font-weight:1000; color:var(--purple);
+    min-height:38px;
+  }
+  .hint { color:var(--muted); font-size:13px; min-height:18px; }
+  .teacher-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .status { color:var(--muted); font-size:12px; flex:1; min-width:130px; }
+  .rules {
+    margin-top:12px; padding:12px 15px; color:var(--muted);
+    font-size:12px; line-height:1.65;
+  }
+  .toast {
+    position:fixed; left:50%; bottom:20px; transform:translate(-50%,15px);
+    opacity:0; pointer-events:none; padding:11px 15px; border-radius:12px;
+    color:#fff; background:#252b45; z-index:5; transition:.2s;
+    text-align:center; max-width:90vw; font-size:13px;
+  }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+  .overlay {
+    display:none; position:fixed; inset:0; z-index:10;
+    background:#18203b77; place-items:center; padding:18px;
+  }
+  .overlay.show { display:grid; }
+  .modal {
+    background:white; border-radius:22px; padding:26px; width:min(400px,100%);
+    text-align:center; box-shadow:0 20px 60px #10193855;
+  }
+  .modal h2 { margin:5px 0; }
+  .modal p { color:var(--muted); line-height:1.6; }
+  .trophy { font-size:48px; }
+
+  @media (max-width:800px) {
+    .app { padding:12px; }
+    .game { grid-template-columns:1fr 1fr; }
+    .word-panel { grid-column:1 / -1; grid-row:1; min-height:420px; }
+    .word-field { min-height:375px; }
+    .player { grid-row:2; }
+  }
+  @media (max-width:430px) {
+    .game { gap:8px; }
+    .player-head { padding:10px 8px; font-size:13px; }
+    .card-grid { padding:7px; }
+    .word-panel { min-height:370px; }
+    .word-field { min-height:325px; }
+    .word { padding:3px; }
+    .btn { padding:9px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>🔎 Cari Perkataan</h1>
+      <div class="subtitle">马来文找生字 · 听华文意思，找出对应的马来文字</div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-light" id="micBtn">🎙️ 麦克风</button>
+      <button class="btn btn-primary" id="newGameBtn">↻ 新游戏</button>
+    </div>
+  </header>
+
+  <main class="game">
+    <section class="panel player">
+      <div class="player-head">
+        <div class="player-name"><span class="badge">1</span>Player 1</div>
+        <span class="score">找到 <b id="p1Score">0</b></span>
+      </div>
+      <div class="card-grid" id="p1Grid" aria-label="Player 1 格子"></div>
+    </section>
+
+    <section class="panel word-panel">
+      <div class="word-head">
+        <strong>📚 马来文生字</strong>
+        <span class="word-count" id="roundText">第 1 / 20 题</span>
+      </div>
+      <div class="word-field" id="wordField"></div>
+    </section>
+
+    <section class="panel player p2">
+      <div class="player-head">
+        <div class="player-name"><span class="badge">2</span>Player 2</div>
+        <span class="score">打叉 <b id="p2Score">0</b></span>
+      </div>
+      <div class="card-grid" id="p2Grid" aria-label="Player 2 格子"></div>
+    </section>
+  </main>
+
+  <section class="panel teacher">
+    <div class="teacher-title">🎤 老师说出华文意思</div>
+    <div class="clue" id="clue">准备开始</div>
+    <div class="hint" id="hint">找到正确的马来文字后，绿色线会划过生字。</div>
+    <div class="teacher-row">
+      <button class="btn btn-mic" id="listenBtn">🎙️ 开始听老师</button>
+      <button class="btn btn-light" id="nextBtn">🔊 播报提示</button>
+      <span class="status" id="status">游戏已经准备好。</span>
+    </div>
+  </section>
+
+  <section class="panel rules">
+    <b>玩法：</b>老师说出华文意思，Player 1 点击中间对应的马来文字；Player 2 同时点击右边格子打叉。Player 1 找到正确答案时，Player 2 的格子会立即锁定，然后自动进入下一题。
+    语音识别需要浏览器允许使用麦克风；如不支持，可直接看屏幕上的华文提示。
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="trophy">🏆</div>
+    <h2 id="winner">游戏结束</h2>
+    <p id="result"></p>
+    <button class="btn btn-primary" id="againBtn">再玩一局</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const WORDS = [
+    ["kampung","村庄"], ["nenek","祖母"], ["datuk","祖父"],
+    ["bermain","玩耍"], ["memancing","钓鱼"], ["ikan","鱼"],
+    ["sungai","河流"], ["pulang","回家"], ["membantu","帮助"],
+    ["sayur","蔬菜"], ["keluarga","家庭"], ["sekolah","学校"],
+    ["kawan","朋友"], ["bersih","干净"], ["cantik","美丽"],
+    ["bunga","花"], ["pokok","树"], ["makanan","食物"],
+    ["gembira","开心"], ["rajin","勤劳"]
+  ];
+  const $ = id => document.getElementById(id);
+  const field = $("wordField");
+  let game, recognition, toastTimer;
+
+  function shuffle(list) {
+    const a=[...list];
+    for(let i=a.length-1;i>0;i--) {
+      const j=Math.floor(Math.random()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
+    }
+    return a;
+  }
+
+  function newGame() {
+    game = {
+      order:shuffle(WORDS.map((_,i)=>i)),
+      round:0, p1:0, p2:0, locked:false, started:true,
+      crossed:[false,false], wrongTimer:null
+    };
+    $("overlay").classList.remove("show");
+    $("p1Score").textContent="0";
+    $("p2Score").textContent="0";
+    makeCards();
+    showRound();
+  }
+
+  function makeCards() {
+    for (const id of ["p1Grid","p2Grid"]) {
+      const grid=$(id); grid.innerHTML="";
+      for(let i=0;i<35;i++) {
+        const cell=document.createElement("button");
+        cell.type="button"; cell.className="square";
+        cell.setAttribute("aria-label",`${id==="p1Grid"?"Player 1":"Player 2"} 第${i+1}格`);
+        cell.addEventListener("click",()=>crossCell(cell));
+        grid.appendChild(cell);
+      }
+    }
+  }
+
+  function showRound() {
+    if(game.round>=game.order.length) { finish(); return; }
+    game.current=game.order[game.round];
+    game.locked=false;
+    const [word,meaning]=WORDS[game.current];
+    $("roundText").textContent=`第 ${game.round+1} / 20 题`;
+    $("clue").textContent=meaning;
+    $("hint").textContent=`请在中间找出马来文生字（${word.length} 个字母）`;
+    $("status").textContent="Player 1 找生字；Player 2 点击格子打叉。";
+    renderWords();
+    setCrossingEnabled(true);
+  }
+
+  function renderWords() {
+    field.innerHTML="";
+    const wordOrder=shuffle(WORDS.map((_,i)=>i));
+    const w=field.clientWidth || 500;
+    const h=field.clientHeight || 455;
+    const sizes=[18,19,20,21,22,23,24,25,27,29,31,33,35,37,40,43,46,50,54,58];
+    wordOrder.forEach((id,index)=>{
+      const [word]=WORDS[id];
+      const btn=document.createElement("button");
+      btn.type="button"; btn.className="word"; btn.textContent=word;
+      btn.style.fontSize=`${sizes[index]}px`;
+      btn.dataset.wordId=String(id);
+      const x=2+Math.random()*Math.max(0,w-130);
+      const y=3+Math.random()*Math.max(0,h-70);
+      const angle=(Math.random()*18-9).toFixed(1);
+      btn.style.left=`${x}px`; btn.style.top=`${y}px`;
+      btn.style.transform=`rotate(${angle}deg)`;
+      btn.addEventListener("click",()=>chooseWord(btn,id));
+      field.appendChild(btn);
+    });
+  }
+
+  function setCrossingEnabled(enabled) {
+    document.querySelectorAll("#p2Grid .square").forEach(cell=>{
+      cell.disabled=!enabled || game.crossed[1] || !game.started;
+    });
+  }
+
+  function crossCell(cell) {
+    if(!game.started || game.locked || game.crossed[1] || cell.classList.contains("crossed")) return;
+    cell.classList.add("crossed");
+    game.p2++;
+    $("p2Score").textContent=String(game.p2);
+    if(document.querySelectorAll("#p2Grid .square.crossed").length===35) {
+      game.crossed[1]=true;
+      $("status").textContent="Player 2 的格子已经全部打叉，等待 Player 1 找到答案。";
+      setCrossingEnabled(false);
+    }
+  }
+
+  function chooseWord(button,id) {
+    if(!game.started || game.locked) return;
+    if(id===game.current) {
+      game.locked=true;
+      game.p1++;
+      $("p1Score").textContent=String(game.p1);
+      button.classList.add("found");
+      $("hint").textContent=`答对了！答案是 ${WORDS[id][0]}`;
+      $("status").textContent="答对了！Player 2 打叉已暂停。";
+      setCrossingEnabled(false);
+      setTimeout(()=>{
+        if(!game || !game.started) return;
+        game.round++;
+        showRound();
+      },1100);
+    } else {
+      button.classList.add("wrong");
+      $("status").textContent="这个字不正确，再找一找！";
+      clearTimeout(game.wrongTimer);
+      game.wrongTimer=setTimeout(()=>{
+        button.classList.remove("wrong");
+        if(game && game.started) $("status").textContent="Player 1 找生字；Player 2 点击格子打叉。";
+      },650);
+    }
+  }
+
+  function finish() {
+    game.started=false; game.locked=true;
+    setCrossingEnabled(false);
+    $("winner").textContent=game.p1>=game.p2?"Player 1 获胜！":"Player 2 获胜！";
+    $("result").textContent=`Player 1 找到 ${game.p1} 个生字；Player 2 打叉 ${game.p2} 格。`;
+    $("overlay").classList.add("show");
+  }
+
+  function sayClue() {
+    if(!("speechSynthesis" in window)) { toast("浏览器暂不支持语音播报"); return; }
+    speechSynthesis.cancel();
+    const utter=new SpeechSynthesisUtterance($("clue").textContent);
+    utter.lang="zh-CN"; utter.rate=.9;
+    speechSynthesis.speak(utter);
+  }
+
+  function listen() {
+    const SpeechRecognition=window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRecognition) { toast("此浏览器不支持语音识别，请使用屏幕提示"); return; }
+    if(recognition) { try { recognition.stop(); } catch(e) {} }
+    recognition=new SpeechRecognition();
+    recognition.lang="zh-CN";
+    recognition.interimResults=true;
+    recognition.continuous=false;
+    recognition.onstart=()=>{
+      $("micBtn").classList.add("listening");
+      $("listenBtn").classList.add("listening");
+      $("status").textContent="正在聆听老师说话…";
+    };
+    recognition.onresult=event=>{
+      let spoken="";
+      for(let i=event.resultIndex;i<event.results.length;i++) spoken+=event.results[i][0].transcript;
+      if(spoken.trim()) {
+        $("clue").textContent=spoken.trim();
+        $("hint").textContent="老师说的意思已显示，请学生寻找对应的马来文字。";
+      }
+    };
+    recognition.onerror=event=>{
+      $("status").textContent=event.error==="not-allowed"
+        ?"麦克风权限被拒绝，请在浏览器设置中允许。"
+        :"语音识别暂时无法使用。";
+    };
+    recognition.onend=()=>{
+      $("micBtn").classList.remove("listening");
+      $("listenBtn").classList.remove("listening");
+    };
+    try { recognition.start(); } catch(e) { toast("麦克风正在使用中，请稍后再试"); }
+  }
+
+  function toast(message) {
+    const el=$("toast");
+    el.textContent=message; el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>el.classList.remove("show"),2200);
+  }
+
+  $("newGameBtn").addEventListener("click",newGame);
+  $("againBtn").addEventListener("click",newGame);
+  $("micBtn").addEventListener("click",listen);
+  $("listenBtn").addEventListener("click",listen);
+  $("nextBtn").addEventListener("click",sayClue);
+
+  window.addEventListener("resize",()=>{
+    if(game && game.started) renderWords();
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
